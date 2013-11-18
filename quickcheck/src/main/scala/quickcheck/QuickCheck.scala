@@ -14,10 +14,10 @@ abstract class QuickCheckHeap extends Properties("Heap") with IntHeap {
     def checkHeapStep(heap: H, min: Int): Boolean = {
       if(isEmpty(heap)){
         true
+      } else if (min > findMin(heap)){
+        false
       } else {
-        val nextMin = findMin(heap)
-        //output = output.concat("(" + min + " <= " + nextMin + " " + (min <= nextMin) + ")")
-        (min <= nextMin) && checkHeapStep(deleteMin(heap), nextMin)
+        checkHeapStep(deleteMin(heap), findMin(heap))
       }
     }
     checkHeapStep(h, Int.MinValue)
@@ -30,9 +30,12 @@ abstract class QuickCheckHeap extends Properties("Heap") with IntHeap {
 
   // proves heap1 & heap2 wrong
   property("gen1") = forAll { (h: H) =>
-	  val m = if (isEmpty(h)) 0 else findMin(h)
+    if (isEmpty(h)) true
+    else {
+      val m = findMin(h)
 	  findMin(insert(m, h)) == m
-	}
+    }  
+  }
   
   property("del1") = forAll { (a: Int) =>
     val h = insert(a, empty)
@@ -65,9 +68,23 @@ abstract class QuickCheckHeap extends Properties("Heap") with IntHeap {
   }
   
   property("ordered_after_delete") = forAll { h: H =>
-    if(isEmpty(h)) true
-    val del = deleteMin(h)
-    checkHeapOrder(del)
+    if(isEmpty(h)) {
+      true
+    } else {
+      val del = deleteMin(h)
+      checkHeapOrder(del)
+    }
+  }
+  
+  property("min after delete should be equal or larger") = forAll { h: H =>
+    if(isEmpty(h)) {
+      true
+    } else {
+      val min = findMin(h)
+      val del = deleteMin(h)
+      if(!isEmpty(del)) min <= findMin(del)
+      else true
+    }
   }
   
   property("ordered_after_insert") = forAll { (h: H, a: Int) =>
@@ -84,7 +101,7 @@ abstract class QuickCheckHeap extends Properties("Heap") with IntHeap {
   lazy val genHeap: Gen[H] = {
     for {
       x <- arbitrary[Int]
-      m <- oneOf(value(empty), genHeap)
+      m <- oneOf(value(empty), genHeap, genHeap)
     } yield insert(x, m)
   }
 
