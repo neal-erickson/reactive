@@ -35,18 +35,18 @@ package object nodescala {
     def all[T](fs: List[Future[T]]): Future[List[T]] = {
         val p = Promise[List[T]]()
         var items = List[T]()
-        for(i <- 0 until fs.length - 1) {
+        for(i <- 0 until fs.length) {
           val current = fs(i)
           Await.ready(current, Duration.Inf) // waits until the result is ready, pass or fail
           val currentEvaluated = current.value.get // should be ok always, given the await
           currentEvaluated match {
             case Success(v) => 
-              items = items.+:(v)
+              items = items.:+(v)
             case Failure(e) => 
               p failure e
           }
         }
-        p success items
+        p success items // if we got here, no exceptions
         p.future // return the future
     }
 
@@ -80,8 +80,9 @@ package object nodescala {
      */
     def delay(t: Duration): Future[Unit] = {
       Future {
-        Thread.sleep(t.toMillis)
-        Unit
+        blocking {
+          Thread.sleep(t.toMillis)
+        }
       }
     }
 
@@ -109,7 +110,13 @@ package object nodescala {
      *  However, it is also non-deterministic -- it may throw or return a value
      *  depending on the current state of the `Future`.
      */
-    def now: T = ???
+    def now: T = {
+      if(f.isCompleted){
+        f.value.get.get
+      } else {
+        throw new NoSuchElementException()
+      }
+    }
 
     /** Continues the computation of this future by taking the current future
      *  and mapping it into another future.
@@ -117,7 +124,19 @@ package object nodescala {
      *  The function `cont` is called only after the current future completes.
      *  The resulting future contains a value returned by `cont`.
      */
-    def continueWith[S](cont: Future[T] => S): Future[S] = ???
+    def continueWith[S](cont: Future[T] => S): Future[S] = {
+      val p = Promise[S]()
+      f.onComplete(finished => {
+        finished match {
+          case Success(x) =>
+            val mutated = cont(f)
+            p.success(mutated)
+          case Failure(e) =>
+            p.failure(e)
+        }
+      })
+      p.future
+    }
 
     /** Continues the computation of this future by taking the result
      *  of the current future and mapping it into another future.
@@ -125,7 +144,19 @@ package object nodescala {
      *  The function `cont` is called only after the current future completes.
      *  The resulting future contains a value returned by `cont`.
      */
-    def continue[S](cont: Try[T] => S): Future[S] = ???
+    def continue[S](cont: Try[T] => S): Future[S] = {
+      val p = Promise[S]()
+      f.onComplete(finished => {
+        finished match {
+          case Success(x) =>
+            val mutated = cont(finished)
+            p.success(mutated)
+          case Failure(e) =>
+            p.failure(e)
+        }
+      })
+      p.future
+    }
 
   }
 
@@ -169,10 +200,16 @@ package object nodescala {
   /** Creates cancellation token sources.
    */
   object CancellationTokenSource {
-    /** Creates a new `CancellationTokenSource`.
-     */
-    def apply(): CancellationTokenSource = ???
-  }
+	  def apply(): CancellationTokenSource = new CancellationTokenSource {
+	    val p = Promise[Unit]()
+	    val cancellationToken = new CancellationToken {
+	      def isCancelled = p.future.value != None
+	    }
+	    def unsubscribe() {
+	      p.trySuccess(())
+	    }
+	  }
+	}
 
 }
 

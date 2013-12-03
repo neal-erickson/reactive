@@ -33,7 +33,23 @@ class NodeScalaSuite extends FunSuite {
       case t: TimeoutException => // ok!
     }
   }
+  
+  test("All future should contain all futures passed in") {
+    val futures = List(1, 2, 3, 4, 5).map(x => Future { x })
+    val all = Future.all(futures)
+    val result = Await.result(all, Duration.Inf)
+    assert(result.length === 5)
+  }
 
+  test("All future should keep order") {
+    val futures = List(3, 1, 2).map(x => Future { Thread.sleep(x * 100); x })
+    val all = Future.all(futures)
+    val result = Await.result(all, Duration.Inf)
+    assert(result(0) === 3)
+    assert(result(1) === 1)
+    assert(result(2) === 2)
+  }
+  
   test("CancellationTokenSource should allow stopping the computation") {
     val cts = CancellationTokenSource()
     val ct = cts.cancellationToken
