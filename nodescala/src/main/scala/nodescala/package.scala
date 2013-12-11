@@ -92,9 +92,13 @@ package object nodescala {
       readLine(message)
     }
 
-    /** Creates a cancellable context for an execution and runs it.
+    /** Creates a cancelable context for an execution and runs it.
      */
-    def run()(f: CancellationToken => Future[Unit]): Subscription = ???
+    def run()(f: CancellationToken => Future[Unit]): Subscription = {
+      val s = CancellationTokenSource.apply()
+	  val result = f(s.cancellationToken)
+      s
+    }
 
   }
 
@@ -129,8 +133,13 @@ package object nodescala {
       f.onComplete(finished => {
         finished match {
           case Success(x) =>
-            val mutated = cont(f)
-            p.success(mutated)
+            try {
+              val mutated = cont(f)
+              p.success(mutated)
+            } catch {
+              case error : Throwable => 
+                p.failure(error)
+            }
           case Failure(e) =>
             p.failure(e)
         }
@@ -149,8 +158,12 @@ package object nodescala {
       f.onComplete(finished => {
         finished match {
           case Success(x) =>
-            val mutated = cont(finished)
-            p.success(mutated)
+            try {
+              val mutated = cont(finished)
+              p.success(mutated)
+            } catch {
+              case error : Throwable => p.failure(error)
+            }
           case Failure(e) =>
             p.failure(e)
         }
@@ -210,6 +223,4 @@ package object nodescala {
 	    }
 	  }
 	}
-
 }
-

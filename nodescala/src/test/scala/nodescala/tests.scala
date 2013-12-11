@@ -67,6 +67,43 @@ class NodeScalaSuite extends FunSuite {
     assert(Await.result(p.future, 1 second) == "done")
   }
 
+  test("Future.continueWith should work"){
+    val testFuture = future { 2 }
+    val other = testFuture continueWith {
+      case input => input.value.get.get + "string"
+    }
+    assert(Await.result(other, Duration.Inf) === "2string")
+  }
+  
+  test("Future.continueWith should handle exceptions thrown by the user specified continuation function"){
+    val testFuture = future { 1 }
+    val other = testFuture continueWith {
+      case always => {
+        if(always.value.get.get == 1){
+          throw new IllegalStateException("blerg!")
+        }
+        always.value.get.get + "string"
+      }
+    }
+    Await.ready(other, 2 seconds)
+    assert(other.isCompleted === true)
+    assert(other.value.get.isFailure === true)
+  }
+  
+//  test("future.run doesn't break"){
+//    val working = Future.run() { ct =>
+//	  Future {
+//	    while (ct.nonCancelled) {
+//	      println("working")
+//	    }
+//	    println("done")
+//	  }
+//	}
+//	Future.delay(5 seconds) onSuccess {
+//	  case _ => working.unsubscribe()
+//	}
+//  }
+  
   class DummyExchange(val request: Request) extends Exchange {
     @volatile var response = ""
     val loaded = Promise[String]()
